@@ -1,0 +1,111 @@
+# Publie une version dès que __version__ change dans therightbibtex/__init__.py :
+# tests, build, PyPI (secret PYPI_KEY), puis tag vX.Y.Z et release GitHub avec les fichiers.
+# Une version déjà sur PyPI n'est pas republiée ; une release manquante est recréée.
+name: pypi
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - therightbibtex/__init__.py
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      pypi: ${{ steps.check.outputs.pypi }}
+      release: ${{ steps.check.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' therightbibtex/__init__.py)
+          if [ -z "$version" ]; then echo "::error::__version__ not found"; exit 1; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/therightbibtex/$version/json")
+          case "$code" in
+            404) echo "pypi=true" >> "$GITHUB_OUTPUT"; echo "$version is not on PyPI yet" ;;
+            200) echo "pypi=false" >> "$GITHUB_OUTPUT"; echo "$version is already on PyPI" ;;
+            *) echo "::error::PyPI answered $code"; exit 1 ;;
+          esac
+
+          if gh release view "v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"; echo "release v$version already exists"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"; echo "release v$version will be created"
+          fi
+
+  tests:
+    needs: version
+    if: needs.version.outputs.pypi == 'true' || needs.version.outputs.release == 'true'
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: [version, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - name: Check the built version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          ls dist
+          test -f "dist/therightbibtex-$VERSION-py3-none-any.whl"
+          test -f "dist/therightbibtex-$VERSION.tar.gz"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  pypi:
+    needs: [version, build]
+    if: needs.version.outputs.pypi == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_KEY }}
+
+  github:
+    needs: [version, build, pypi]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.pypi.result != 'failure' && needs.version.outputs.release == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "v$VERSION" \
+            --generate-notes

@@ -1,0 +1,53 @@
+{
+ "search_information": {
+  "total_results": 2
+ },
+ "organic_results": [
+  {
+   "position": 1,
+   "title": "Attention is all you need",
+   "result_id": "SYNTHETIC001",
+   "link": "https://proceedings.neurips.cc/paper/7181-attention-is-all-you-need",
+   "publication_info": {
+    "summary": "A Vaswani, N Shazeer, N Parmar… - Advances in neural …, 2017 - proceedings.neurips.cc",
+    "authors": [
+     {
+      "name": "A Vaswani"
+     },
+     {
+      "name": "N Shazeer"
+     },
+     {
+      "name": "N Parmar"
+     }
+    ]
+   },
+   "resources": [
+    {
+     "title": "neurips.cc",
+     "file_format": "PDF",
+     "link": "https://proceedings.neurips.cc/paper/2017/file/example-Paper.pdf?src_trk=synthetic"
+    }
+   ],
+   "inline_links": {
+    "cited_by": {
+     "total": 1234
+    }
+   }
+  },
+  {
+   "position": 2,
+   "title": "Attention is all you need in speech separation",
+   "result_id": "SYNTHETIC002",
+   "link": "https://ieeexplore.ieee.org/abstract/document/0000000",
+   "publication_info": {
+    "summary": "C Subakan, M Ravanelli… - ICASSP 2021, 2021 - ieeexplore.ieee.org"
+   },
+   "inline_links": {
+    "cited_by": {
+     "total": 56
+    }
+   }
+  }
+ ]
+}

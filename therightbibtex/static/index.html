@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>therightbibtex</title>
+<meta name="description" content="Find the right BibTeX for a paper by cross-checking Crossref, DBLP, arXiv, OpenReview, Semantic Scholar, OpenAlex, HAL, PubMed and the official conference sites.">
+<meta name="theme-color" content="#fafaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17181d" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/static/favicon.svg?v=1" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png?v=1">
+<link rel="manifest" href="/static/manifest.webmanifest?v=1">
+<link rel="preload" href="/static/fonts/bricolage-latin.woff2" as="font" type="font/woff2" crossorigin>
+<script src="/static/prefs.js?v=1"></script>
+<link rel="stylesheet" href="/static/style.css?v=1">
+</head>
+<body>
+<div id="app" class="booting">
+
+  <!-- Application -->
+  <div id="shell" class="shell" hidden>
+    <aside class="side" id="side">
+      <div class="side-head">
+        <a class="logo" href="#" id="home-link" title="New search" aria-label="therightbibtex: new search">~\cite</a>
+        <button class="icon-btn side-close" id="side-close" aria-label="Close menu">×</button>
+      </div>
+      <nav class="side-nav">
+        <button class="nav-item" id="nav-search" data-view="search">Search</button>
+        <div class="side-block">
+          <div class="side-title">Recent <button class="link tiny" id="history-clear" hidden>Clear</button></div>
+          <ul class="history" id="history"></ul>
+        </div>
+        <div class="side-block grow">
+          <div class="side-title">Favorites <button class="icon-btn add" id="folder-add" title="New folder" aria-label="New folder">+</button></div>
+          <ul class="tree" id="tree"></ul>
+        </div>
+      </nav>
+      <div class="side-foot">
+        <span class="who" id="who"></span>
+        <button class="icon-btn theme-btn" id="theme-toggle" aria-label="Switch between light and dark theme" title="Light / dark theme">
+          <svg class="moon" viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M15.5 12.6A6.5 6.5 0 0 1 7.4 4.5a6.5 6.5 0 1 0 8.1 8.1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <svg class="sun" viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><circle cx="10" cy="10" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.2v2M10 15.8v2M2.2 10h2M15.8 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M4.5 15.5l1.4-1.4M14.1 5.9l1.4-1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <button class="link tiny" id="open-settings">Settings</button>
+      </div>
+      <div class="side-resize" id="side-resize" role="separator" aria-orientation="vertical" aria-label="Resize sidebar" tabindex="0" title="Drag to resize, double-click to reset"></div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <main class="main" id="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menu-btn" aria-label="Menu">
+          <svg viewBox="0 0 20 20" width="20" height="20"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+        </button>
+        <form class="omni" id="omni" autocomplete="off">
+          <textarea id="q" rows="1" spellcheck="false" placeholder="Title, DOI, arXiv, link or reference"></textarea>
+          <input type="file" id="pdf-input" accept="application/pdf,.pdf" multiple hidden>
+          <button type="button" class="btn ghost" id="pdf-btn" title="Search from one or more PDFs">PDF</button>
+          <button type="submit" class="btn primary" id="go">Search</button>
+        </form>
+      </header>
+
+      <section id="view-search" class="view">
+        <div class="multiline-ask" id="multiline-ask" hidden>
+          <span>Several lines:</span>
+          <button class="btn small" id="ml-batch">One search per line</button>
+          <button class="btn small ghost" id="ml-single">A single reference</button>
+        </div>
+        <div class="sources" id="sources" aria-live="polite"></div>
+        <div id="query-info" class="query-info"></div>
+        <div id="results"></div>
+        <div id="empty" class="empty">
+          <p class="home-hint">Title, DOI, arXiv, link, reference or BibTeX. You can also drop a PDF anywhere on the page.</p>
+          <div class="home-recent" id="home-recent" aria-label="Recent searches"></div>
+        </div>
+      </section>
+
+      <section id="view-folder" class="view" hidden>
+        <div class="folder-head">
+          <div class="crumbs" id="crumbs"></div>
+          <div class="folder-actions" id="folder-actions"></div>
+        </div>
+        <div class="subfolders" id="subfolders" hidden></div>
+        <div class="folder-tools">
+          <input type="search" id="fav-filter" placeholder="Filter by title, author, key, year…" autocomplete="off">
+          <label class="check"><input type="checkbox" id="fav-recursive" checked> Include subfolders</label>
+        </div>
+        <div class="bulkbar" id="bulkbar" hidden></div>
+        <ul class="favs" id="favs"></ul>
+      </section>
+    </main>
+  </div>
+
+  <div class="dropzone" id="dropzone" hidden><div>Drop the PDF to find its BibTeX</div></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</div>
+
+<dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title">
+  <div class="dialog-inner">
+    <div class="dialog-head">
+      <h2 id="settings-title">Settings</h2>
+      <span class="muted" id="settings-status" aria-live="polite"></span>
+      <button type="button" class="icon-btn" id="settings-close" aria-label="Close settings">×</button>
+    </div>
+    <form id="settings-form" class="settings">
+      <section>
+        <h3>BibTeX</h3>
+        <div class="set-grid">
+          <label for="s-key">Citation key</label>
+          <select id="s-key" name="key_style">
+            <option value="scholar">vaswani2017attention</option>
+            <option value="AuthorYear">Vaswani2017</option>
+            <option value="AuthorYearWord">Vaswani2017Attention</option>
+            <option value="dblp">DBLP:conf/nips/VaswaniSPUJGKP17</option>
+          </select>
+          <label for="s-venue">Venue name</label>
+          <select id="s-venue" name="venue_style">
+            <option value="full">Full official name</option>
+            <option value="short">Short: ICML</option>
+            <option value="short_year">Short with year: ICML 2021</option>
+          </select>
+          <label for="s-arxiv">arXiv preprints</label>
+          <select id="s-arxiv" name="arxiv_style">
+            <option value="article">@article, journal = arXiv preprint</option>
+            <option value="misc">@misc with eprint (biblatex)</option>
+          </select>
+          <label for="s-accents">Accents</label>
+          <select id="s-accents" name="accents">
+            <option value="latex">LaTeX: {\'e}</option>
+            <option value="unicode">Unicode: é</option>
+          </select>
+          <label for="s-url">URL</label>
+          <select id="s-url" name="url">
+            <option value="auto">Only when there is no DOI</option>
+            <option value="always">Always</option>
+            <option value="never">Never</option>
+          </select>
+          <label for="s-authors">Max authors</label>
+          <span class="inline"><input id="s-authors" type="number" name="max_authors" min="1" max="1000" step="1"> <span class="muted">then "and others"</span></span>
+        </div>
+        <div class="set-checks">
+          <label class="check"><input type="checkbox" name="doi"> DOI</label>
+          <label class="check"><input type="checkbox" name="month"> Month</label>
+          <label class="check"><input type="checkbox" name="abstract"> Abstract</label>
+          <label class="check"><input type="checkbox" name="protect_caps"> Protect capitals <code>{BERT}</code></label>
+        </div>
+      </section>
+      <section>
+        <h3>Appearance</h3>
+        <div class="segmented" role="radiogroup" aria-label="Theme" id="theme-choice">
+          <button type="button" role="radio" data-choice="system">System</button>
+          <button type="button" role="radio" data-choice="light">Light</button>
+          <button type="button" role="radio" data-choice="dark">Dark</button>
+        </div>
+      </section>
+      <section>
+        <h3>API keys</h3>
+        <div id="keys-list"></div>
+      </section>
+      <section>
+        <h3>Storage</h3>
+        <p class="muted set-note">Settings, API keys and favorites stay on this computer, in <code id="home-path"></code></p>
+      </section>
+    </form>
+  </div>
+</dialog>
+
+<script src="/static/app.js?v=1"></script>
+</body>
+</html>

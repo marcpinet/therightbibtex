@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "therightbibtex"
+dynamic = ["version"]
+description = "The right BibTeX for any paper, checked against every source: published version first, with the origin of every field."
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Marc Pinet" }]
+requires-python = ">=3.10"
+keywords = ["bibtex", "latex", "citation", "bibliography", "dblp", "openreview", "arxiv", "crossref", "google-scholar"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+    "PyMuPDF>=1.24",
+    "rapidfuzz>=3.6",
+    "pylatexenc>=2.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/marcpinet/therightbibtex"
+Issues = "https://github.com/marcpinet/therightbibtex/issues"
+Releases = "https://github.com/marcpinet/therightbibtex/releases"
+
+[project.scripts]
+therightbibtex = "therightbibtex.cli:main"
+
+[tool.hatch.version]
+path = "therightbibtex/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["therightbibtex"]
+
+[tool.hatch.build.targets.sdist]
+include = ["therightbibtex", "tests", "README.md", "LICENSE"]
