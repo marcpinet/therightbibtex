@@ -115,15 +115,15 @@ a:hover { text-decoration-color: currentColor; }
 .btn.danger { color: var(--danger); }
 .btn:disabled { opacity: .45; cursor: default; }
 .btn.done { border-color: var(--ok); color: var(--ok); }
-/* Copie réussie : un coup de surligneur traverse le bouton. */
-.btn.swiped { position: relative; overflow: hidden; }
+/* Copie réussie : un coup de surligneur remplit le bouton de gauche à droite. */
+.btn.swiped { position: relative; overflow: hidden; isolation: isolate; }
 .btn.swiped::after {
-  content: ""; position: absolute; inset: 22% -2%; z-index: -1;
-  background: color-mix(in srgb, var(--hl-yellow) var(--hl-k), transparent); border-radius: .3em .8em .4em .7em;
-  transform-origin: left; animation: swipe .45s ease-out both;
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: color-mix(in srgb, var(--hl-yellow) var(--hl-k), transparent);
+  animation: swipe .45s ease-out both;
 }
-.btn.primary.swiped { color: var(--ink); background: transparent; border-color: var(--ink); isolation: isolate; }
-@keyframes swipe { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.btn.primary.swiped { color: var(--ink); background: transparent; border-color: var(--ink); }
+@keyframes swipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
 @media (prefers-reduced-motion: reduce) { .btn.swiped::after { animation: none; } }
 .link { background: none; border: 0; padding: 0; color: var(--ink-2); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
 .link:hover { color: var(--ink); text-decoration-color: currentColor; }
