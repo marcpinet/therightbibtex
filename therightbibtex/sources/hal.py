@@ -10,7 +10,7 @@ NAME = "hal"
 API = "https://api.archives-ouvertes.fr/search/"
 FL = ("halId_s,docType_s,title_s,subTitle_s,authFirstName_s,authLastName_s,producedDateY_i,"
       "publicationDateY_i,journalTitle_s,conferenceTitle_s,bookTitle_s,doiId_s,arxivId_s,volume_s,"
-      "issue_s,page_s,publisher_s,label_bibtex,uri_s,proceedings_s")
+      "issue_s,page_s,publisher_s,label_bibtex,uri_s,proceedings_s,version_i")
 
 _KIND = {"ART": "journal", "COMM": "conference", "POSTER": "conference", "OUV": "book",
          "DOUV": "book", "COUV": "chapter", "THESE": "thesis", "HDR": "thesis", "MEM": "thesis",
@@ -45,6 +45,8 @@ def _parse(d: dict, rank: int = 0) -> Record | None:
         status="preprint" if kind == "preprint" else "published",
         link=d.get("uri_s", ""), weight=WEIGHTS[NAME], rank=rank,
     )
+    if d.get("version_i"):
+        rec.ids["hal_version"] = f"v{d['version_i']}"
     if d.get("label_bibtex"):
         rec.bibtex = bibtex.reformat(d["label_bibtex"])
         rec.bibtex_label = "HAL"

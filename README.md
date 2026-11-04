@@ -57,7 +57,7 @@ The BibTeX goes to stdout and the notes to stderr, so `therightbibtex "..." > pa
 ```bash
 therightbibtex 2010.11929 --all                 # every version: published, preprint, submission
 therightbibtex "https://openreview.net/forum?id=YicbFdNTTy"
-therightbibtex paper.pdf                        # title, DOI and arXiv ID read from the PDF
+therightbibtex paper.pdf                        # title, DOI, arXiv or HAL ID read from the PDF
 therightbibtex refs.bib -o refs-checked.bib     # check a whole .bib, citation keys are kept
 therightbibtex batch titles.txt                 # one reference per line (or - for stdin)
 therightbibtex "attention is all you need" -s key_style=dblp -s venue_style=short
@@ -86,6 +86,7 @@ keeping the citation keys your paper already uses. Light and dark themes, and it
 | `Atention is all you ned` | **NeurIPS 2017**, after fixing the typos |
 | `dosovitskiy image worth words` | an author name and a few title words are enough |
 | `2010.11929`, a DOI, an OpenReview or proceedings link | the published version, not only the preprint |
+| `hal-03692072`, a HAL link or a PDF with its HAL cover page | the entry with its `hal_id` and `hal_version` |
 | a reference copied from a PDF, a BibTeX entry, or the PDF itself | the clean, checked entry |
 
 ## Features
@@ -149,6 +150,7 @@ therightbibtex config unset key_style       # back to the default
 | `protect_caps` | `true` | wrap acronyms in braces (`{BERT}`) |
 | `url` | `auto` | `auto` (only without DOI), `always`, `never` |
 | `doi`, `month`, `abstract` | `true`, `false`, `false` | include these fields |
+| `hal` | `true` | `hal_id` and `hal_version` of a HAL deposit, as in HAL's own export |
 | `max_authors` | `100` | longer lists end with `and others` |
 | `contact_email` | none | sent to Crossref and OpenAlex for their faster "polite" pool |
 | `port` | `8137` | port of `therightbibtex serve` |
@@ -200,7 +202,7 @@ therightbibtex/
   bibtex.py      parsing, rendering, citation keys
   venues.py      venue names and abbreviations (NIPS is NeurIPS, ISO 4 forms)
   query.py       what the input is: title, identifiers, reference, BibTeX
-  pdfinfo.py     title, DOI and arXiv ID from a PDF
+  pdfinfo.py     title, DOI, arXiv and HAL ID from a PDF
   config.py      config.json: settings, options, API keys
   store.py       SQLite library: folders, favorites, history
   static/        the web interface: vanilla JS, no build step, self-hosted fonts

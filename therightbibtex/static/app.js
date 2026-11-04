@@ -587,7 +587,8 @@ function renderCard(work, v, s) {
   const actions = h("div", { class: "card-actions" }, copyBtn, saveBtn, keyBtn, srcBtn, h("span", { class: "spacer" }));
   if (v.doi) actions.append(h("a", { class: "btn ghost small", href: `https://doi.org/${v.doi}`, target: "_blank", rel: "noopener", text: "DOI" }));
   if (v.arxiv) actions.append(h("a", { class: "btn ghost small", href: `https://arxiv.org/abs/${v.arxiv}`, target: "_blank", rel: "noopener", text: "arXiv" }));
-  if (v.url && !v.url.includes("doi.org") && !v.url.includes("arxiv.org")) actions.append(h("a", { class: "btn ghost small", href: v.url, target: "_blank", rel: "noopener", text: "Page" }));
+  if (v.hal) actions.append(h("a", { class: "btn ghost small", href: `https://hal.science/${v.hal}`, target: "_blank", rel: "noopener", text: "HAL" }));
+  if (v.url && !v.url.includes("doi.org") && !v.url.includes("arxiv.org") && !(v.hal && v.url.includes(v.hal))) actions.append(h("a", { class: "btn ghost small", href: v.url, target: "_blank", rel: "noopener", text: "Page" }));
   wrap.append(actions);
 
   // infos de version, avis, désaccords

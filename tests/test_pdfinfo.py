@@ -28,6 +28,21 @@ class Extract(unittest.TestCase):
         self.assertEqual(info["venue_hint"], "ICLR 2024")
         self.assertEqual(info["pages"], 1)
 
+    def test_hal_cover_page(self):
+        import pymupdf
+        doc = pymupdf.open()
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((150, 420), "Exploiter l'API de HAL avec Python", fontsize=17)
+        page.insert_text((250, 450), "Julien Caugant", fontsize=12)
+        page.insert_text((200, 800), "HAL Id: hal-03692072", fontsize=12)
+        page.insert_text((150, 820), "https://amu.hal.science/hal-03692072v1", fontsize=12)
+        data = doc.tobytes()
+        doc.close()
+        info = pdfinfo.extract_isolated(data)
+        self.assertEqual(info["hal"], "hal-03692072")
+        self.assertEqual(info["title"], "Exploiter l'API de HAL avec Python")
+        self.assertEqual(pdfinfo.extract_isolated(sample_pdf())["hal"], "")
+
     def test_garbage(self):
         with self.assertRaises(ValueError):
             pdfinfo.extract_isolated(b"%PDF-1.4 ceci n'est pas un pdf")

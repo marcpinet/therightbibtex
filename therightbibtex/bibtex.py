@@ -311,6 +311,7 @@ DEFAULT_SETTINGS = {
     "protect_caps": True,
     "url": "auto",                 # auto (sans DOI) | always | never
     "doi": True,
+    "hal": True,                   # hal_id / hal_version d'un dépôt HAL (champs de l'export de HAL)
     "month": False,
     "abstract": False,
     "max_authors": 100,
@@ -449,6 +450,9 @@ def render(spec: dict, settings: dict | None = None) -> dict:
     url = spec.get("url", "")
     if url and (st["url"] == "always" or (st["url"] == "auto" and not (st["doi"] and doi))):
         add("url", url)
+    if st["hal"] and spec.get("hal"):
+        add("hal_id", spec["hal"], "hal")
+        add("hal_version", spec.get("hal_version"), "hal")
     if preprint and arxiv and st["arxiv_style"] == "misc":
         add("eprint", arxiv, "arxiv")
         add("archivePrefix", "arXiv", "arxiv")

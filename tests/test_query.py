@@ -22,6 +22,20 @@ class Identifiers(unittest.TestCase):
         self.check("PMC1234567", ids={"pmcid": "PMC1234567"})
         self.check("10.48550/arXiv.1706.03762", arxiv="1706.03762", doi="")
 
+    def test_hal_ids(self):
+        for text in ("hal-03692072", "HAL-03692072v1", "HAL Id: hal-03692072", "hal:hal-03692072",
+                     "\u27e8hal-03692072\u27e9"):
+            self.check(text, kind="id", ids={"hal": "hal-03692072"})
+        self.check("tel-01234567v2", ids={"hal": "tel-01234567"})
+        self.check("hal-lirmm-01234567", ids={"hal": "hal-lirmm-01234567"})
+        self.check("https://amu.hal.science/hal-03692072v1", kind="id", ids={"hal": "hal-03692072"})
+        self.check("https://inria.hal.science/inria-00072421/document", ids={"hal": "inria-00072421"})
+        self.check("hal-0369207", kind="title")                     # 7 chiffres : pas un identifiant HAL
+        # « To cite this version » de la page de garde HAL : référence avec l'identifiant en indice fort.
+        q = self.check("Julien Caugant. Exploiter l'API de HAL avec Python. Journées CasuHAL 2022, Jun 2022, "
+                       "En visio, France. \u27e8hal-03692072\u27e9", kind="reference", ids={"hal": "hal-03692072"})
+        self.assertEqual(q.year, 2022)
+
     def test_urls(self):
         self.check("https://arxiv.org/abs/1706.03762v5", kind="id", arxiv="1706.03762")
         self.check("arxiv.org/pdf/1706.03762v5", kind="id", arxiv="1706.03762")           # sans https://
@@ -44,6 +58,10 @@ class Identifiers(unittest.TestCase):
                        "journal={arXiv preprint arXiv:1512.03385}, year={2015}}", kind="bibtex")
         self.assertEqual(q.arxiv, "1512.03385")
         self.assertEqual(q.authors, ["He", "Sun"])
+        q = self.check("@inproceedings{caugant:hal-03692072, TITLE = {{Exploiter l'API de HAL avec Python}}, "
+                       "AUTHOR = {Caugant, Julien}, YEAR = {2022}, HAL_ID = {hal-03692072}, HAL_VERSION = {v1}}",
+                       kind="bibtex")
+        self.assertEqual(q.ids, {"hal": "hal-03692072"})
 
 
 class References(unittest.TestCase):

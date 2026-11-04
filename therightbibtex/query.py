@@ -10,7 +10,7 @@ from . import bibtex
 from .sources.base import Query
 from .sources.pages import is_official
 from .textutil import (
-    ARXIV_NEW_RE, ARXIV_OLD_RE, DOI_RE, arxiv_from_doi, clean_title, family_key, latex_to_text,
+    ARXIV_NEW_RE, ARXIV_OLD_RE, DOI_RE, HAL_ID_RE, arxiv_from_doi, clean_title, family_key, latex_to_text,
     norm_arxiv, norm_doi, year_of,
 )
 
@@ -59,7 +59,7 @@ def _url_query(url: str) -> Query | None:
         if m:
             q.ids["pmcid"] = m.group(1).upper()
     elif host.endswith("hal.science") or host.endswith("archives-ouvertes.fr"):
-        m = re.search(r"((?:hal|tel|inria|cea|halshs|hal-\w+)-\d{6,8})", path)
+        m = HAL_ID_RE.search(path.lower())
         if m:
             q.ids["hal"] = m.group(1)
     elif host.endswith("dblp.org") or host.endswith("dblp.uni-trier.de"):
@@ -199,6 +199,9 @@ def parse_input(raw: str) -> Query:
                 q.arxiv = m.group(1)
             if q.doi and arxiv_from_doi(q.doi):
                 q.arxiv, q.doi = arxiv_from_doi(q.doi), ""
+            hal = HAL_ID_RE.fullmatch(e.get("hal_id").strip().lower())   # export de HAL : HAL_ID = {...}
+            if hal:
+                q.ids["hal"] = hal.group(1)
             url = e.get("url")
             if url and not q.has_ids():
                 uq = _url_query(url)
@@ -225,12 +228,20 @@ def parse_input(raw: str) -> Query:
         return Query(raw=s, kind="id", ids={"pmid": re.sub(r"\D", "", one_line)})
     if re.fullmatch(r"(?i)pmc\d{5,9}", bare):
         return Query(raw=s, kind="id", ids={"pmcid": bare.upper()})
+    # « hal-03692072 », « HAL Id: tel-01234567v2 », « ⟨hal-03692072⟩ » (le « To cite this version » de HAL).
+    m = HAL_ID_RE.fullmatch(re.sub(r"(?i)^hal\s*(id)?\s*:\s*", "", one_line).strip("\u27e8\u27e9<> ").lower())
+    if m:
+        return Query(raw=s, kind="id", ids={"hal": m.group(1)})
     # DOI au milieu d'une référence : on le garde comme indice fort.
     doi_in = norm_doi(DOI_RE.search(one_line).group(1)) if DOI_RE.search(one_line) else ""
     arxiv_in = ""
     m = re.search(r"arxiv[:\s/]*(?:abs/)?(\d{4}\.\d{4,5})", one_line, re.I)
     if m:
         arxiv_in = m.group(1)
+    hal_in = {}
+    m = re.search(r"[\u27e8<]\s*([\w-]+)\s*[\u27e9>]", one_line)
+    if m and HAL_ID_RE.fullmatch(m.group(1).lower()):
+        hal_in = {"hal": HAL_ID_RE.fullmatch(m.group(1).lower()).group(1)}
     text = latex_to_text(one_line) if "\\" in one_line or "{" in one_line else one_line
     words = text.split()
     # Les identifiants (arXiv 2002.05709, DOI) ne donnent pas l'année.
@@ -243,7 +254,7 @@ def parse_input(raw: str) -> Query:
         lead = text.split(title)[0] if title else re.split(r"\b(19|20)\d\d\b", text)[0]
         q = Query(raw=s, kind="reference", text=text, title=clean_title(title) if title else "",
                   authors=_surnames(lead), year=year_of(dated), doi=doi_in if not arxiv_from_doi(doi_in) else "",
-                  arxiv=arxiv_in or arxiv_from_doi(doi_in), context=text)
+                  arxiv=arxiv_in or arxiv_from_doi(doi_in), ids=hal_in, context=text)
         return q
     if has_year and len(words) <= 15:
         # « Auteurs titre revue 2015 » ou « Titre 2017 » : référence courte. Le titre
@@ -251,7 +262,8 @@ def parse_input(raw: str) -> Query:
         # sert à vérifier les auteurs.
         title = re.sub(r"[(\[]?\b(?:19|20)\d\d\b[)\]]?", " ", text)
         title = re.sub(r"\s+", " ", title).strip(" ,.;:")
-        return Query(raw=s, kind="reference", text=text, title=clean_title(title), year=year_of(dated), context=text)
+        return Query(raw=s, kind="reference", text=text, title=clean_title(title), year=year_of(dated), ids=hal_in,
+                     context=text)
     title = text.strip().strip("\"“”«»'").strip()
     title = re.sub(r"\s*\.$", "", title)
     return Query(raw=s, kind="title", title=title, year=None)

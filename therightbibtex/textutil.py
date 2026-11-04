@@ -19,6 +19,8 @@ from rapidfuzz import fuzz
 DOI_RE = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>{}]+)", re.I)
 ARXIV_NEW_RE = re.compile(r"(?<![\d.])(\d{4}\.\d{4,5})(v\d+)?(?![\d])")
 ARXIV_OLD_RE = re.compile(r"\b([a-z][a-z\-]+(?:\.[A-Z]{2})?/\d{7})(v\d+)?\b")
+# Identifiant HAL : préfixe du portail (hal, tel, halshs, inria, hal-lirmm...) puis 8 chiffres, version facultative.
+HAL_ID_RE = re.compile(r"(?<![\w-])([a-z][a-z0-9]*(?:-[a-z][a-z0-9]*)*-\d{8})(?:v(\d+))?(?![\w-])")
 
 # Préfixes DOI de serveurs de prépublications / dépôts (pas des versions publiées).
 PREPRINT_DOI_PREFIXES = (

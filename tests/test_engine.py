@@ -116,6 +116,23 @@ class Clustering(unittest.TestCase):
         self.assertIsNone(crossref._venue_year(["Workshop 2009"], 2006))          # après le dépôt : douteux
         self.assertIsNone(crossref._venue_year(["Joint 2004/2005 Meeting"], 2006))  # deux années
 
+    def test_hal_deposit(self):
+        """La notice HAL apporte hal_id / hal_version à sa version ; un PDF avec la page de garde HAL
+        donne l'identifiant à chercher."""
+        from therightbibtex.sources import hal
+        d = {"halId_s": "hal-03692072", "docType_s": "COMM", "title_s": ["Exploiter l'API de HAL avec Python"],
+             "authFirstName_s": ["Julien"], "authLastName_s": ["Caugant"], "producedDateY_i": 2022,
+             "conferenceTitle_s": "Journées CasuHAL 2022", "uri_s": "https://amu.hal.science/hal-03692072v1",
+             "version_i": 1}
+        r = hal._parse(d)
+        self.assertEqual((r.ids["hal"], r.ids["hal_version"]), ("hal-03692072", "v1"))
+        versions = engine.build_versions([r])
+        spec = engine.merge_version(versions[0])
+        self.assertEqual((spec["hal"], spec["hal_version"], spec["prov"]["hal"]), ("hal-03692072", "v1", "hal"))
+        self.assertEqual(bibtex.parse_one(bibtex.render(spec)["bibtex"]).get("hal_id"), "hal-03692072")
+        q = engine.query_from_pdf({"title": "Exploiter l'API de HAL avec Python", "hal": "hal-03692072"}, "x.pdf")
+        self.assertEqual((q.kind, q.ids), ("pdf", {"hal": "hal-03692072"}))
+
 
 class KeywordQueries(unittest.TestCase):
     """« dosovitskiy image worth words » : nom d'auteur et mots du titre mélangés."""

@@ -499,6 +499,11 @@ def merge_version(v: dict, pool: list[Record] | None = None) -> dict:
             spec["school"] = next((r.school for r in primary if r.school), spec["venue"])
         if kind == "report":
             spec["institution"] = next((r.institution for r in primary if r.institution), spec["venue"])
+    # Dépôt HAL de cette version : hal_id / hal_version, comme dans l'export BibTeX de HAL.
+    hal_rec = next((r for r in sorted(primary, key=lambda r: r.source != "hal") if r.ids.get("hal")), None)
+    if hal_rec:
+        spec["hal"], prov["hal"] = hal_rec.ids["hal"], hal_rec.source
+        spec["hal_version"] = hal_rec.ids.get("hal_version", "")
     month = next((r.month for r in sorted(primary, key=lambda r: -r.weight) if r.month and r.year == year), None)
     if month:
         spec["month"] = month
@@ -1246,7 +1251,7 @@ class Search:
                 "id": f"{wid}v{vi}", "status": v["status"], "kind": spec["kind"],
                 "label": _version_label(spec, vrecs), "year": spec.get("year"),
                 "venue": spec.get("venue", ""), "doi": spec.get("doi", ""), "arxiv": spec.get("arxiv", ""),
-                "url": spec.get("url", ""), "spec": spec, "bibtex": rendered["bibtex"], "key": rendered["key"],
+                "hal": spec.get("hal", ""), "url": spec.get("url", ""), "spec": spec, "bibtex": rendered["bibtex"], "key": rendered["key"],
                 "prov": rendered["prov"], "prov_labels": prov_labels, "sources": sources, "notices": notices,
                 "retracted": any(r.retracted for r in vrecs), "conflicts": _conflicts(vrecs, spec),
                 "info": info, "support": primary_weight,
@@ -1378,9 +1383,11 @@ def apply_pdf_info(q: Query, info: dict) -> Query:
     q.title = info.get("title") or q.title
     q.doi = q.doi or info.get("doi", "")
     q.arxiv = q.arxiv or info.get("arxiv", "")
+    if info.get("hal") and not q.ids.get("hal"):
+        q.ids["hal"] = info["hal"]
     q.context = info.get("context", "")
     q.venue_hint = info.get("venue_hint", "")
-    q.original = {"pdf": {k: info.get(k) for k in ("title", "meta_title", "doi", "arxiv", "venue_hint", "pages")}}
+    q.original = {"pdf": {k: info.get(k) for k in ("title", "meta_title", "doi", "arxiv", "hal", "venue_hint", "pages")}}
     return q
 
 

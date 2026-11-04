@@ -14,7 +14,7 @@ import re
 import subprocess
 import sys
 
-from .textutil import DOI_RE, clean_markup, norm_arxiv, norm_doi
+from .textutil import DOI_RE, HAL_ID_RE, clean_markup, norm_arxiv, norm_doi
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,8 @@ def _title_from_layout(page) -> str:
 def extract(data: bytes) -> dict:
     import pymupdf as fitz
 
-    info = {"title": "", "doi": "", "arxiv": "", "context": "", "venue_hint": "", "meta_title": "", "pages": 0}
+    info = {"title": "", "doi": "", "arxiv": "", "hal": "", "context": "", "venue_hint": "", "meta_title": "",
+            "pages": 0}
     try:
         doc = fitz.open(stream=data, filetype="pdf")
     except Exception as e:
@@ -134,6 +135,11 @@ def extract(data: bytes) -> dict:
         for d in xmp_dois + meta_dois + page_dois:
             info["doi"] = d
             break
+        # Page de garde ajoutée par HAL : « HAL Id: hal-03692072 ».
+        m = re.search(r"HAL Id\s*:\s*([\w-]+)", text1)
+        m = HAL_ID_RE.fullmatch(m.group(1).lower()) if m else None
+        if m:
+            info["hal"] = m.group(1)
         if first is not None:
             info["title"] = _title_from_layout(first)
         if (not info["title"] or len(info["title"]) < 12) and info["meta_title"]:

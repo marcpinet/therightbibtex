@@ -91,6 +91,17 @@ class Render(unittest.TestCase):
         self.assertEqual(f["author"], "Erdős, Pál")
         self.assertNotIn("{", f["title"])
 
+    def test_hal_id(self):
+        """Dépôt HAL : hal_id / hal_version comme dans l'export de HAL, retirables dans les réglages."""
+        spec = dict(SPEC, hal="hal-03692072", hal_version="v1", prov={"hal": "hal"})
+        r = bibtex.render(spec)
+        f = fields(r["bibtex"])
+        self.assertEqual((f["hal_id"], f["hal_version"]), ("hal-03692072", "v1"))
+        self.assertEqual(r["prov"]["hal_id"], "hal")
+        f = fields(bibtex.render(spec, {"hal": False})["bibtex"])
+        self.assertNotIn("hal_id", f)
+        self.assertNotIn("hal_id", fields(bibtex.render(SPEC)["bibtex"]))
+
     def test_bad_settings_are_ignored(self):
         st = bibtex.merged_settings({"key_style": "rien", "max_authors": "beaucoup", "url": 3})
         self.assertEqual((st["key_style"], st["max_authors"], st["url"]), ("scholar", 100, "auto"))
