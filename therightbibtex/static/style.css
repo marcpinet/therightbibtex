@@ -396,6 +396,9 @@ a:hover { text-decoration-color: currentColor; }
 .brow .bk { font-family: var(--mono); font-size: .8rem; color: var(--ink-2); }
 .brow .bk.up { font-family: var(--ui); color: var(--ok); font-weight: 600; }
 .bdetail { padding: 0 0 1.2rem 2rem; }
+/* Choix sous une entrée du lot qui a plusieurs possibilités (versions, autres papiers, la sienne). */
+.bchoices { padding: 0 .3rem .55rem 2.3rem; margin: -.35rem 0 0; }
+.bchoices .vtab { padding: .15rem .15rem; }
 
 /* ------------------------------------------------------------- favoris */
 .folder-head { display: flex; flex-wrap: wrap; align-items: center; gap: .7rem 1rem; justify-content: space-between; margin-top: .4rem; }

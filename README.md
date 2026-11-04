@@ -60,11 +60,16 @@ therightbibtex "https://openreview.net/forum?id=YicbFdNTTy"
 therightbibtex paper.pdf                        # title, DOI, arXiv or HAL ID read from the PDF
 therightbibtex refs.bib -o refs-checked.bib     # check a whole .bib, citation keys are kept
 therightbibtex batch titles.txt                 # one reference per line (or - for stdin)
+therightbibtex pick refs.bib -o refs-checked.bib  # same, but asks which one to keep when there are several
 therightbibtex "attention is all you need" -s key_style=dblp -s venue_style=short
 therightbibtex "..." --json                     # every version and the source of each field
 ```
 
 `--refresh` skips the local cache, `-q` prints only BibTeX, `-v` logs what each source does.
+
+`pick` only asks when an entry has several possibilities (published version and preprint, other similar papers),
+while the next searches keep running: Enter keeps the recommended one, a number picks another, `k` keeps your
+entry, `s 2` shows a BibTeX, `a` accepts the recommended one for the rest, `q` keeps the rest as it is.
 
 ## Web interface
 
@@ -72,7 +77,8 @@ therightbibtex "..." --json                     # every version and the source o
 therightbibtex serve        # opens http://localhost:8137
 ```
 
-The same search with live results, plus a library: favorites in colored, nested folders, `.bib` and CSL-JSON
+The same search with live results, and batches: paste several lines or a whole `.bib`, and entries with several
+possibilities show their choices right in the list. Plus a library: favorites in colored, nested folders, `.bib` and CSL-JSON
 import and export, and one click to re-check every preprint of a folder and upgrade it to its published version,
 keeping the citation keys your paper already uses. Light and dark themes, and it works on a phone too:
 `--host 0.0.0.0` makes it reachable from your local network, without a password, so only on a network you trust.

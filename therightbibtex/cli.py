@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import concurrent.futures
 import getpass
 import json
 import logging
@@ -20,7 +21,7 @@ from . import __version__, bibtex, config, engine, keycheck, pdfinfo
 from . import query as query_mod
 from .sources.http import Http
 
-COMMANDS = ("search", "batch", "serve", "config", "keys")
+COMMANDS = ("search", "batch", "pick", "serve", "config", "keys")
 CONFIDENCE_WORD = {"high": "high confidence", "medium": "check it: other papers look similar", "low": "uncertain match"}
 EXIT_NOT_FOUND = 1
 
@@ -239,13 +240,176 @@ def cmd_batch(args, out: Out) -> int:
             await http.close()
 
     asyncio.run(go())
+    return _write_results(args, out, results, len(items) - missing, missing)
+
+
+def _write_results(args, out: Out, results: list, found: int, kept: int) -> int:
     body = "\n\n".join(r for r in results if r) + "\n"
     if args.output:
         Path(args.output).write_text(body, encoding="utf-8")
-        out.info(f"Wrote {len(items) - missing} entries to {args.output}" + (f", {missing} kept as they were" if missing else ""))
+        out.info(f"Wrote {found} entries to {args.output}" + (f", {kept} kept as they were" if kept else ""))
     else:
         sys.stdout.write(body)
-    return 0 if missing < len(items) else EXIT_NOT_FOUND
+    return 0 if found else EXIT_NOT_FOUND
+
+
+# ================================================================== lots avec choix
+
+def choices(works: list[dict]) -> list[dict]:
+    """Ce que l'utilisateur peut garder : les versions du papier trouvé (la recommandée
+    d'abord), puis les autres papiers candidats quand la correspondance n'est pas sûre."""
+    if not works:
+        return []
+    w = works[0]
+    rec = recommended(w)
+    out = [{"label": f"{rec['label']} ({rec['status']}, recommended)", "bibtex": rec["bibtex"]}]
+    out += [{"label": f"{v['label']} ({v['status']})", "bibtex": v["bibtex"]}
+            for v in w["versions"] if v["id"] != rec["id"] and not v.get("suspicious")]
+    if w["confidence"] != "high":
+        for x in works[1:4]:
+            v = recommended(x)
+            out.append({"label": f"other paper: {x['title'][:60]} ({v['label']})", "bibtex": v["bibtex"]})
+    return out
+
+
+def parse_answer(text: str, n: int, default: str) -> tuple[str, int]:
+    """Réponse tapée -> (action, numéro) : pick (1..n), keep, show, all, quit, ou again
+    si la réponse n'est pas comprise. Entrée seule = le choix par défaut."""
+    t = text.strip().lower()
+    if not t:
+        return (default, 1) if default == "pick" else (default, 0)
+    if t.isdigit() and 1 <= int(t) <= n:
+        return "pick", int(t)
+    if t in ("k", "keep"):
+        return "keep", 0
+    if t in ("a", "all"):
+        return "all", 0
+    if t in ("q", "quit"):
+        return "quit", 0
+    m = t.removeprefix("show").removeprefix("s").strip()
+    if t.startswith("s") and m.isdigit() and 1 <= int(m) <= n:
+        return "show", int(m)
+    return "again", 0
+
+
+def _searches_in_background(items: list[str], settings: dict, refresh: bool) -> list[concurrent.futures.Future]:
+    """Lance les recherches (deux à la fois) dans un fil à part et rend un résultat à
+    attendre par entrée : les recherches avancent pendant que l'utilisateur répond, et
+    Ctrl+C ou q n'ont rien à attendre (le fil s'arrête avec le programme)."""
+    futures = [concurrent.futures.Future() for _ in items]
+
+    async def go():
+        http = Http()
+        queue = list(enumerate(items))
+
+        async def worker():
+            while queue:
+                i, item = queue.pop(0)
+                try:
+                    works = await _search(http, query_mod.parse_input(item), settings, refresh)
+                except Exception as e:  # une recherche en échec ne bloque pas les questions
+                    logging.getLogger(__name__).info("Recherche en échec : %s", e)
+                    works = []
+                futures[i].set_result(works)
+
+        try:
+            await asyncio.gather(worker(), worker())
+        finally:
+            await http.close()
+
+    threading.Thread(target=lambda: asyncio.run(go()), daemon=True).start()
+    return futures
+
+
+def _wait(future: concurrent.futures.Future, out: Out, text: str) -> list[dict]:
+    # Attente par petits pas : Ctrl+C passe aussi sous Windows.
+    while True:
+        try:
+            return future.result(timeout=0.2)
+        except concurrent.futures.TimeoutError:
+            out.progress(text)
+
+
+def _ask(out: Out, n: int, default: str) -> tuple[str, int]:
+    while True:
+        out.clear()
+        sys.stderr.write(f"Choice [{'1' if default == 'pick' else 'k'}]: ")
+        sys.stderr.flush()
+        line = sys.stdin.readline()
+        if not line:
+            return "quit", 0     # fin de l'entrée : plus de questions
+        action, num = parse_answer(line, n, default)
+        if action != "again":
+            return action, num
+        print(f"  type a number from 1 to {n}, k, s and a number, a or q", file=sys.stderr)
+
+
+def cmd_pick(args, out: Out) -> int:
+    """Comme batch, mais chaque entrée qui a plusieurs possibilités (version publiée et
+    prépublication, autres papiers proches) fait l'objet d'une question : laquelle garder."""
+    if args.file == "-" or not sys.stdin.isatty():
+        raise SystemExit("pick asks a question for each entry: run it in a terminal on a file (or use batch)")
+    text = Path(args.file).read_text(encoding="utf-8", errors="replace")
+    items, is_bib = _batch_items(text)
+    if not items:
+        raise SystemExit(f"{args.file}: no BibTeX entry and no reference to look up")
+    settings = _settings(args.setting)
+    keep_keys = is_bib and not args.new_keys
+    futures = _searches_in_background(items, settings, args.refresh)
+    results: list[str | None] = [None] * len(items)
+    found = kept = 0
+    mode = "ask"          # ask | all (a : la recommandée pour le reste) | stop (q : le reste tel quel)
+
+    def say(text: str):   # les questions s'affichent même avec -q
+        out.clear()
+        print(text, file=sys.stderr)
+
+    for i, item in enumerate(items):
+        head = f"[{i + 1}/{len(items)}]"
+        if mode == "stop":   # sans attendre les recherches restantes
+            results[i] = item if is_bib else f"% not found: {item}"
+            kept += 1
+            continue
+        works = _wait(futures[i], out, f"{head} searching...")
+        opts = choices(works)
+        confident = bool(works) and works[0]["confidence"] in ("high", "medium")
+        old = bibtex.parse_one(item) if is_bib else None
+        action, num = "keep", 0
+        if not opts:
+            out.info(f"{head} not found, kept as is: {item.splitlines()[0][:60]}")
+        elif mode == "all" or (len(opts) == 1 and works[0]["confidence"] == "high"):
+            action, num = ("pick", 1) if confident else ("keep", 0)
+            out.info(f"{head} {opts[0]['label'] if confident else 'uncertain match, kept as is'}: "
+                     f"{works[0]['title'][:60]}")
+        else:
+            # Par défaut : la version recommandée, sauf si la correspondance est incertaine.
+            default = "pick" if confident else "keep"
+            say("")
+            say(f"{head} {works[0]['title']}")
+            say(f"  your entry: {old.key or '(no key)'}" if old else f"  you typed: {item[:70]}")
+            if works[0]["confidence"] != "high":
+                say(f"  {CONFIDENCE_WORD.get(works[0]['confidence'], 'unrated')}")
+            for n, o in enumerate(opts, 1):
+                say(f"  {n}. {o['label']}")
+            say("  k. keep your entry as it is" if is_bib else "  k. leave it out")
+            say("  s 2 shows a BibTeX, a accepts the rest, q stops asking")
+            while True:
+                action, num = _ask(out, len(opts), default)
+                if action != "show":
+                    break
+                say(opts[num - 1]["bibtex"])
+            if action == "all":
+                action, num, mode = default, 1, "all"
+            elif action == "quit":
+                action, mode = "keep", "stop"
+        if action == "pick":
+            entry = opts[num - 1]["bibtex"]
+            results[i] = bibtex.set_key(entry, old.key) if keep_keys and old and old.key else entry
+            found += 1
+        else:
+            results[i] = item if is_bib else f"% not found: {item}"
+            kept += 1
+    return _write_results(args, out, results, found, kept)
 
 
 # ================================================================== serveur
@@ -361,6 +525,7 @@ def _parser() -> argparse.ArgumentParser:
                "  therightbibtex 2010.11929 --all\n"
                "  therightbibtex paper.pdf\n"
                "  therightbibtex refs.bib -o refs-checked.bib\n"
+               "  therightbibtex pick refs.bib -o refs-checked.bib\n"
                "  therightbibtex serve",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--version", action="version", version=f"therightbibtex {__version__}")
@@ -382,6 +547,17 @@ def _parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("batch", help="check a .bib file, or one reference per line")
     sp.add_argument("file", help="a .bib file, a text file with one reference per line, or - for stdin")
+    sp.add_argument("-o", "--output", help="write the result to this file instead of stdout")
+    sp.add_argument("--new-keys", action="store_true", help="give .bib entries new citation keys")
+    search_opts(sp)
+
+    sp = sub.add_parser("pick", help="like batch, but asks which one to keep when an entry has several possibilities",
+                        description="Checks a .bib file (or one reference per line) like batch. When an entry has "
+                                    "several possibilities (published version and preprint, other similar papers), "
+                                    "it asks which one to keep: Enter keeps the recommended one, a number picks "
+                                    "another, k keeps your entry, s 2 shows a BibTeX, a accepts the recommended "
+                                    "one for the rest, q keeps the rest as it is.")
+    sp.add_argument("file", help="a .bib file or a text file with one reference per line")
     sp.add_argument("-o", "--output", help="write the result to this file instead of stdout")
     sp.add_argument("--new-keys", action="store_true", help="give .bib entries new citation keys")
     search_opts(sp)
@@ -422,7 +598,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "search" and getattr(args, "output", None):
             return _search_to_file(args, out)
-        return {"search": cmd_search, "batch": cmd_batch, "serve": cmd_serve,
+        return {"search": cmd_search, "batch": cmd_batch, "pick": cmd_pick, "serve": cmd_serve,
                 "config": cmd_config, "keys": cmd_keys}[args.command](args, out)
     except config.ConfigError as e:
         raise SystemExit(str(e)) from None

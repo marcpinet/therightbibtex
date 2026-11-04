@@ -489,7 +489,7 @@ function renderWork(work, s) {
       class: "vtab" + (x.id === v.id ? " active" : "") + (x.id === work.recommended ? " rec" : "") + (x.suspicious ? " susp" : ""),
       role: "tab", "aria-selected": x.id === v.id ? "true" : "false",
       title: x.suspicious ? x.suspicious_reason : plural(x.n_sources, "source", "sources"),
-      onclick: () => { s.chosen[work.id] = x.id; rerender(s); },
+      onclick: () => { s.chosen[work.id] = x.id; s.keep = false; rerender(s); },
     }, h("span", { class: "vlabel", text: x.label }), h("span", { class: "vstatus", text: status })));
   }
   if (susp.length && !showSusp) {
@@ -718,11 +718,62 @@ function renderBatchSoon(b) {
   requestAnimationFrame(() => { batchQueued = false; if (state.batch === b) renderBatch(); });
 }
 
+// Papier retenu pour une entrée du lot : le premier résultat, ou celui que l'utilisateur a choisi.
+const curWork = (s) => s.works.find((x) => x.id === s.current) || s.works[0];
+const isBibItem = (it) => !!it.text && /^\s*@/.test(it.text);
+
+// Une entrée BibTeX collée reste telle quelle si l'utilisateur le choisit (s.keep), si rien
+// n'a été trouvé, ou si la correspondance est incertaine (tant qu'il n'a rien choisi d'autre).
+function keptAsIs(it) {
+  if (!isBibItem(it) || !["done", "fail"].includes(it.status)) return false;
+  if (it.status === "fail") return true;
+  return it.search.keep ?? it.search.works[0]?.confidence === "low";
+}
+
 function batchEntry(it) {
-  const w = it.search.works[0];
+  if (keptAsIs(it)) {
+    return { text: it.text, key: (it.text.match(/^\s*@\w+\s*[{(]\s*([^,\s]*)/) || [])[1] || "", title: it.label, kept: true };
+  }
+  const w = curWork(it.search);
   if (!w) return null;
   const v = versionOf(w, it.search);
   return { text: bibOf(it.search, v), key: (bibOf(it.search, v).match(/^@\w+\{([^,]*)/) || [])[1] || "", title: w.title };
+}
+
+// Ce qu'on peut garder pour une entrée : les versions du papier trouvé, puis les autres
+// papiers candidats quand la correspondance n'est pas sûre.
+function batchChoices(it) {
+  const w = it.search.works[0];
+  if (it.status !== "done" || !w) return [];
+  const out = w.versions.filter((x) => !x.suspicious).map((v) => ({ work: w, v, label: v.label,
+    sub: STATUS_WORD[v.status] + (v.id === w.recommended ? ", recommended" : "") }));
+  if (w.confidence !== "high") {
+    for (const x of it.search.works.slice(1, 4)) {
+      const v = x.versions.find((y) => y.id === x.recommended) || x.versions[0];
+      out.push({ work: x, v, label: x.title.length > 48 ? x.title.slice(0, 48) + "…" : x.title, sub: `other paper, ${v.label}` });
+    }
+  }
+  return out;
+}
+const needsChoice = (it) => batchChoices(it).length > 1 || (batchChoices(it).length > 0 && it.search.works[0].confidence !== "high");
+
+function renderChoices(it) {
+  const s = it.search;
+  const kept = keptAsIs(it);
+  const cur = curWork(s);
+  const cv = versionOf(cur, s);
+  const bar = h("div", { class: "versions bchoices", role: "radiogroup", "aria-label": "Which one to keep" });
+  const chip = (on, label, sub, pick) => h("button", {
+    class: "vtab" + (on ? " active" : ""), role: "radio", "aria-checked": on ? "true" : "false",
+    onclick: () => { pick(); renderBatch(); },
+  }, h("span", { class: "vlabel", text: label }), h("span", { class: "vstatus", text: sub }));
+  for (const c of batchChoices(it)) {
+    bar.append(chip(!kept && c.work.id === cur.id && c.v.id === cv.id, c.label, c.sub, () => {
+      s.keep = false; s.current = c.work.id; s.chosen[c.work.id] = c.v.id;
+    }));
+  }
+  if (isBibItem(it)) bar.append(chip(kept, "Your entry", "unchanged", () => { s.keep = true; }));
+  return bar;
 }
 
 function batchBibtex(b) {
@@ -787,6 +838,8 @@ function renderBatch() {
     title: "Replaces preprints with their published version (confident matches only), keeping their key",
     onclick: () => replaceFavs(sureUps) }) : null;
   let summary = `${plural(b.items.length, "search", "searches")}: ${sure} confident, ${done.length - sure} to check, ${fail} not found${pending ? `, ${pending} pending` : ""}`;
+  const toChoose = b.recheck ? 0 : b.items.filter(needsChoice).length;
+  if (toChoose) summary += `; ${toChoose} with several possibilities, pick the one to keep`;
   if (b.recheck) summary += `; ${plural(upgrades.length, "published version", "published versions")} found`;
   if (waiting) summary += `; paused (60 searches per 10 min), resuming in ${waiting >= 60 ? `${Math.floor(waiting / 60)} min ` : ""}${waiting % 60} s`;
   const head = h("div", { class: "batch-head" }, h("span", { class: "grow", text: summary }),
@@ -798,20 +851,21 @@ function renderBatch() {
     const st = it.status === "running" ? "running" : it.status === "fail" ? "fail" : it.status === "done" ? (conf === "high" ? "done" : "medium") : "";
     const entry = batchEntry(it);
     const up = b.recheck ? upgradeOf(it) : null;
-    const tag = !b.recheck ? (entry ? entry.key : "") : it.replaced ? "replaced" : up ? `published: ${up.label}`
-      : it.status === "done" ? "still a preprint" : "";
+    const tag = !b.recheck ? (entry ? (entry.kept ? `${entry.key ? entry.key + " " : ""}(yours)` : entry.key) : "")
+      : it.replaced ? "replaced" : up ? `published: ${up.label}` : it.status === "done" ? "still a preprint" : "";
     const row = h("div", { class: "brow", role: "button", tabindex: "0", "aria-expanded": b.open === it.id ? "true" : "false" },
       h("span", { class: `st ${st}` }),
-      h("div", null, h("div", { class: "bt", text: w ? w.title : (it.status === "fail" ? `Nothing found (${it.error || "?"})` : it.label) }),
+      h("div", null, h("div", { class: "bt", text: w ? curWork(it.search).title : (it.status === "fail" ? `Nothing found (${it.error || "?"})` : it.label) }),
         h("div", { class: "bq", text: it.fav ? `${it.fav.cite_key}: ${it.label}` : it.label })),
       h("span", { class: "bk" + (up && !it.replaced ? " up" : ""), text: tag }));
     const toggle = () => { b.open = b.open === it.id ? null : it.id; renderBatch(); };
     row.addEventListener("click", toggle);
     row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
     const li = h("li", null, row);
+    if (!b.recheck && needsChoice(it)) li.append(renderChoices(it));
     if (b.open === it.id && w) {
       const s = it.search;
-      const cur = s.works.find((x) => x.id === s.current) || w;
+      const cur = curWork(s);
       const det = h("div", { class: "bdetail" });
       if (up && !it.replaced) {
         det.append(h("div", { class: "card-actions" },
@@ -824,7 +878,7 @@ function renderBatch() {
         det.append(h("div", { class: "card-actions" }, h("span", { class: "muted", text: "Not the right one?" }),
           ...s.works.filter((x) => x.id !== cur.id).slice(0, 4).map((x) => h("button", {
             class: "btn small ghost", text: x.title.slice(0, 60) + (x.title.length > 60 ? "…" : ""),
-            onclick: () => { s.current = x.id; s.works = [x, ...s.works.filter((y) => y.id !== x.id)]; renderBatch(); },
+            onclick: () => { s.current = x.id; s.keep = false; renderBatch(); },
           }))));
       }
       li.append(det);
