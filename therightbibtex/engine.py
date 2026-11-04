@@ -369,7 +369,7 @@ def _year_vote(records: list[Record]):
     best: dict[int, tuple[float, str]] = {}
     for r in records:
         if r.year:
-            w = max(1.0, _weight(r, "year"))
+            w = 1.0 if r.year_weak else max(1.0, _weight(r, "year"))
             votes[r.year] += w
             if r.year not in best or w > best[r.year][0]:
                 best[r.year] = (w, r.source)
@@ -517,7 +517,7 @@ def _conflicts(recs: list[Record], spec: dict) -> list[dict]:
     strong = [r for r in recs if r.weight >= 70 and not r.aggregate]
     years = defaultdict(set)
     for r in strong:
-        if r.year:
+        if r.year and not r.year_weak:
             years[r.year].add(LABELS.get(r.source, r.source))
     if len(years) > 1:
         out.append({"field": "year", "values": [{"value": str(y), "sources": sorted(s)} for y, s in sorted(years.items())]})

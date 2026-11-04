@@ -87,6 +87,35 @@ class Clustering(unittest.TestCase):
         spec = engine.merge_version(next(v for v in versions if v["status"] == "published"))
         self.assertEqual((spec["type"], spec["year"], spec["doi"]), ("inproceedings", 2017, "10.5555/1"))
 
+    def test_crossref_without_publication_date(self):
+        """HOT SAX (ICDM'05) : Crossref n'a que la date de dépôt du DOI (5 janvier 2006), qu'OpenAlex
+        recopie ; l'année vient du nom des actes, sinon le dépôt ne pèse presque rien face à DBLP."""
+        from therightbibtex.sources import crossref
+        title = "HOT SAX: Efficiently Finding the Most Unusual Time Series Subsequence"
+        names = ("Eamonn J. Keogh", "Jessica Lin", "Ada Wai-Chee Fu")
+        it = {"DOI": "10.1109/ICDM.2005.79", "type": "proceedings-article", "title": [title],
+              "author": [{"given": "E.", "family": "Keogh"}, {"given": "J.", "family": "Lin"},
+                         {"given": "A.", "family": "Fu"}],
+              "container-title": ["Fifth IEEE International Conference on Data Mining (ICDM'05)"],
+              "event": {"name": "Fifth IEEE International Conference on Data Mining (ICDM'05)"},
+              "issued": {"date-parts": [[None]]}, "created": {"date-parts": [[2006, 1, 5]]}, "page": "226-233"}
+        cr = crossref.parse_item(it)
+        self.assertEqual((cr.year, cr.month, cr.year_weak), (2005, None, False))
+        undated = crossref.parse_item(dict(it, **{"container-title": ["Data Mining"], "event": {}}))
+        self.assertEqual((undated.year, undated.month, undated.year_weak), (2006, None, True))
+        for c in (cr, undated):
+            dblp = rec("dblp", title, authors=names, year=2005, kind="conference", status="published",
+                       doi="10.1109/icdm.2005.79", weight=88)
+            oa = rec("openalex", title, authors=names, year=2006, kind="conference", status="published",
+                     doi="10.1109/icdm.2005.79", weight=55)
+            versions = engine.build_versions([c, dblp, oa])
+            self.assertEqual(len(versions), 1)
+            self.assertEqual(engine.merge_version(versions[0])["year"], 2005)
+        self.assertEqual(crossref._venue_year(["2017 IEEE/ACS 14th International Conference (AICCSA)"], 2017), 2017)
+        self.assertEqual(crossref._venue_year(["Fifth IEEE ICDM (ICDM\u203205)"], 2006), 2005)
+        self.assertIsNone(crossref._venue_year(["Workshop 2009"], 2006))          # après le dépôt : douteux
+        self.assertIsNone(crossref._venue_year(["Joint 2004/2005 Meeting"], 2006))  # deux années
+
 
 class KeywordQueries(unittest.TestCase):
     """« dosovitskiy image worth words » : nom d'auteur et mots du titre mélangés."""

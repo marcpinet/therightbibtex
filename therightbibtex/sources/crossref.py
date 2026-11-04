@@ -36,6 +36,24 @@ def _date(it: dict, *keys) -> list:
     return []
 
 
+# Année écrite dans le nom des actes : « 2017 IEEE/ACS 14th ... », « (ICDM'05) » (apostrophe,
+# apostrophe typographique ou prime, comme dans le BibTeX de doi.org).
+_VENUE_YEAR = re.compile(r"(?<!\d)(19[5-9]\d|20[0-4]\d)(?!\d)|['\u2019\u2032](\d\d)\b")
+
+
+def _venue_year(names, created: int | None) -> int | None:
+    years = set()
+    for name in names:
+        for m in _VENUE_YEAR.finditer(name or ""):
+            yy = int(m.group(2) or 0)
+            years.add(int(m.group(1)) if m.group(1) else yy + (1900 if yy >= 50 else 2000))
+    if len(years) != 1:
+        return None
+    y = years.pop()
+    # Un DOI n'est jamais déposé des années avant la conférence.
+    return y if not created or y <= created + 1 else None
+
+
 # Ouvrages de référence : leurs entrées ne sont jamais l'article cherché.
 _REFERENCE_WORK = re.compile(r"\b(dictionary|encyclopedia|encyclopaedia|accessscience|music online|"
                              r"oxford reference|reference module)\b", re.I)
@@ -63,8 +81,8 @@ def parse_item(it: dict, rank: int = 0) -> Record | None:
     if kind != "preprint" and is_preprint_doi(doi):
         kind = "preprint"
     # Année de citation : version imprimée (celle du volume) avant la mise en ligne.
-    d = _date(it, "published-print", "issued", "published", "published-online", "created") \
-        if kind != "preprint" else _date(it, "posted", "issued", "published", "created")
+    d = _date(it, "published-print", "issued", "published", "published-online") \
+        if kind != "preprint" else _date(it, "posted", "issued", "published")
     containers = [clean_markup(c) for c in it.get("container-title") or [] if c]
     series = ""
     # Chapitres d'actes (LNCS, CCIS...) : Crossref donne [collection, titre du livre].
@@ -79,9 +97,21 @@ def parse_item(it: dict, rank: int = 0) -> Record | None:
     if kind == "preprint" and not venue:
         venue = clean_markup(it.get("institution", [{}])[0].get("name", "")) if it.get("institution") else ""
         venue = venue or it.get("publisher", "")
+    year_weak = False
+    if not d:
+        # Sans date de publication (actes IEEE de 2005-2006...), « created » n'est que le jour du
+        # dépôt du DOI : HOT SAX (ICDM'05) y est daté du 5 janvier 2006, et OpenAlex le recopie.
+        # L'année du nom des actes passe avant ; à défaut, la date de dépôt ne pèse presque rien.
+        created = _date(it, "created")
+        y = _venue_year([(it.get("event") or {}).get("name", ""), *containers], created[0] if created else None) \
+            if kind in ("conference", "chapter") else None
+        if y:
+            d = [y]
+        elif created:
+            d, year_weak = created[:1], True
     rec = Record(
         source=NAME, title=title, authors=authors,
-        year=d[0] if d else None, month=d[1] if len(d) > 1 else None,
+        year=d[0] if d else None, month=d[1] if len(d) > 1 else None, year_weak=year_weak,
         date="-".join(f"{x:02d}" if i else str(x) for i, x in enumerate(d)) if d else "",
         kind=kind, venue=venue,
         venue_short=clean_markup((it.get("short-container-title") or [""])[0]),

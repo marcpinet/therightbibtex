@@ -42,6 +42,7 @@ class Record:
     authors: list[Author] = field(default_factory=list)
     year: int | None = None
     month: int | None = None
+    year_weak: bool = False      # année devinée (date de dépôt du DOI), pas de publication
     date: str = ""               # date de CETTE version (ISO)
     kind: str = "other"          # journal | conference | preprint | chapter | book | thesis | report | dataset | software | reference | other
     venue: str = ""
