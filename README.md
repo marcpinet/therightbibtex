@@ -8,6 +8,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/therightbibtex/"><img alt="PyPI" src="https://img.shields.io/pypi/v/therightbibtex?style=flat-square&color=ffe45c&labelColor=1f2133"></a>
+  <a href="https://pepy.tech/projects/therightbibtex"><img alt="PyPI Downloads" src="https://static.pepy.tech/personalized-badge/therightbibtex?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLUE&right_color=ORANGE&left_text=downloads"></a>
   <a href="https://pypi.org/project/therightbibtex/"><img alt="Python" src="https://img.shields.io/pypi/pyversions/therightbibtex?style=flat-square&color=ffe45c&labelColor=1f2133&logo=python&logoColor=ffe45c"></a>
   <a href="https://github.com/marcpinet/therightbibtex/actions/workflows/tests.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/marcpinet/therightbibtex/tests.yml?branch=main&style=flat-square&label=tests&labelColor=1f2133"></a>
   <img alt="15+ sources" src="https://img.shields.io/badge/sources-15%2B-ffe45c?style=flat-square&labelColor=1f2133">
